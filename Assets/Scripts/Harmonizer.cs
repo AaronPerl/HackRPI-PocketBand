@@ -17,9 +17,9 @@ public class Harmonizer : MonoBehaviour
 	}
 	void Update ()
 	{
-		Debug.Log (getPitch(getFrequency(pitch)));
+		//Debug.Log (getPitch(getFrequency(pitch)));
 	}
-	List<int> updateHarmony(int newPitch)
+	public List<int> updateHarmony(int newPitch)
 	{
 		int degree = (newPitch-key)%12;
 		List<int> possibleFunctions = getPossibleFunctions(degree);
@@ -73,7 +73,10 @@ public class Harmonizer : MonoBehaviour
 	}
 	private int getNewFunction(List<int> possibleFunctions)
 	{
-		return possibleFunctions[Random.Range(0,possibleFunctions.Count-1)];
+		if (possibleFunctions.Count > 0)
+			return possibleFunctions[Random.Range(0,possibleFunctions.Count-1)];
+		else
+			return 0;
 	}
 	public static int getPitch(float frequency)
 	{

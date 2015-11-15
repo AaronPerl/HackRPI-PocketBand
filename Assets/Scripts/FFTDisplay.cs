@@ -11,16 +11,19 @@ public class FFTDisplay : MonoBehaviour {
 	public int freq = 24000;
 	public float delay = 0.033f;
 	const int WINDOW_SIZE = 1024;
-	
-	private float frequency = 440.0f;
 	private float phase = 0;
 	
-	private List<float> volumes;
-	private List<float> frequencies;
+	private int prevDominant = 0;
+	public List<int> pitches;
+	public float volume = 0.0f;
+	//private Dictionary<int, float> pitchesToVolumes;
 	private AudioClip playback;
+	
+	private Harmonizer harmonizer;
 
 	void Start()
 	{
+		harmonizer = GetComponent<Harmonizer>();
 		audioSource.clip = Microphone.Start("", true, 5, freq); 
 		playback = AudioClip.Create(
 		"PlaybackSine",
@@ -34,37 +37,24 @@ public class FFTDisplay : MonoBehaviour {
 	
 	void OnAudioRead(float[] data)
 	{
-		if (volumes != null)
+		List<int> curPitches;
+		float curVolume;
+		lock(this)
 		{
-			List<float> curVolumes;;
-			List<float> curFreqs;
-			lock(this)
+		curPitches = pitches;
+		curVolume = volume;
+		}
+		
+		for (int i = 0; i < data.Length; i++)
+		{
+			float total = 0.0f;
+			foreach (int curTone in curPitches)
 			{
-			curVolumes = volumes;
-			curFreqs = frequencies;
+				total += 1000 * curVolume * Mathf.Sin(phase * Harmonizer.getFrequency(curTone));
 			}
-			for (int i = 0; i < data.Length; i++)
-			{
-				float total = 0.0f;
-				for (int j = 0; j < curVolumes.Count; j++)
-				{
-					total +=
-						Mathf.Min(
-							Mathf.Max(
-								1000 * curVolumes[j] * Mathf.Sin(1.5f * phase * curFreqs[j])
-							, -1.0f)
-						, 1.0f);
-					total +=
-						Mathf.Min(
-							Mathf.Max(
-								1000 * curVolumes[j] * Mathf.Sin(1.2f * phase * curFreqs[j])
-							, -1.0f)
-						, 1.0f);
-				}
-				data[i] = total;
-				phase += 2 * Mathf.PI / 44100;
-				phase %= 2 * Mathf.PI;
-			}
+			data[i] = total;
+			phase += 2 * Mathf.PI / 44100;
+			phase %= 2 * Mathf.PI;
 		}
 	}
 
@@ -82,13 +72,22 @@ public class FFTDisplay : MonoBehaviour {
 			}
 		}
 		audioSource.GetSpectrumData(spectrum, 0, FFTWindow.Hanning);
-		List<float> newVolumes = new List<float>();
-		List<float> newFreqs = new List<float>();
+		Dictionary<int, float> newPitchesToVolumes = new Dictionary<int, float>();
 		for (int i = 1; i < WINDOW_SIZE; i++) {
-			if (i > WINDOW_SIZE/8 && spectrum[i] > threshold)
+			if (spectrum[i] > threshold)
 			{
-				newVolumes.Add(spectrum[i]);
-				newFreqs.Add(((float)i / 150) * 440);
+				float curFreq = ((float) i) / 150 * 440;
+				int pitch = Harmonizer.getPitch(curFreq);
+				if (newPitchesToVolumes.ContainsKey(pitch))
+				{
+					float prevMax = newPitchesToVolumes[pitch];
+					if (spectrum[i] > prevMax)
+						newPitchesToVolumes[pitch] = spectrum[i];
+				}
+				else
+				{
+					newPitchesToVolumes.Add(pitch, spectrum[i]);
+				}
 			}
 			Debug.DrawLine( new Vector3(i - 1, 50000f * spectrum[i - 1] + 10, 0), 
 				new Vector3(i, 50000f * spectrum[i] + 10, 0), 
@@ -103,26 +102,56 @@ public class FFTDisplay : MonoBehaviour {
 				new Vector3(Mathf.Log(i), Mathf.Log(spectrum[i]), 3), 
 				Color.yellow);
 		}
-		lock(this)
+		
+		int dominantPitch = 0;
+		float maxVolume = 0.0f;
+		foreach (KeyValuePair<int, float> pair in newPitchesToVolumes)
 		{
-		volumes = newVolumes;
-		frequencies = newFreqs;
-		}
-		if (newVolumes.Count > 0)
-		{
-			if (!playbackSource.isPlaying)
+			if (pair.Value > maxVolume)
 			{
-				playbackSource.Play();
-				Debug.Log("starting audio");
+				dominantPitch = pair.Key;
+				harmonizer.key = dominantPitch;
+				maxVolume = pair.Value;
 			}
 		}
-		else
+		
+		if (prevDominant != dominantPitch)
 		{
-			if (playbackSource.isPlaying)
+			if (maxVolume != 0.0f)
 			{
-				playbackSource.Stop();
-				Debug.Log("stopping audio");
+				List<int> newPitches = harmonizer.updateHarmony(dominantPitch);
+				
+				lock(this)
+				{
+					pitches = newPitches;
+					volume = maxVolume;
+					//pitchesToVolumes = newPitchesToVolumes;
+				}
+			
+				if (newPitches.Count > 0)
+				{
+					if (!playbackSource.isPlaying)
+					{
+						playbackSource.Play();
+						Debug.Log("starting audio");
+					}
+				}
+				else
+				{
+					if (playbackSource.isPlaying)
+					{
+						playbackSource.Stop();
+						Debug.Log("stopping audio");
+					}
+				}
+			}
+			else
+			{
+				pitches = new List<int>();
+				volume = 0.0f;
 			}
 		}
+		
+		prevDominant = dominantPitch;
 	}
 }
