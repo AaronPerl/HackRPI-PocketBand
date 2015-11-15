@@ -305,7 +305,7 @@ AudioSource:
   Mute: 0
   Spatialize: 0
   Priority: 128
-  DopplerLevel: 1
+  DopplerLevel: .949999988
   MinDistance: 1
   MaxDistance: 500
   Pan2D: 0
@@ -377,9 +377,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   audioSource: {fileID: 1034847862}
   playbackSource: {fileID: 598247660}
-  threshold: 2.99999992e-05
-  freq: 24000
-  delay: .0329999998
+  threshold: .000600000028
+  freq: 48000
+  delay: .00999999978
+  minStopTime: .25
+  pitches: 
+  volume: 0
   spectrum:
   - 0
   - 0
@@ -8601,6 +8604,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 592b44159c3a44f48beeb68b84e3a732, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  key: 0
+  key: 64
   pitch: 0
   function: 1

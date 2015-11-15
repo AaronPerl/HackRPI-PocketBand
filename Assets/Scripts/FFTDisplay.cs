@@ -8,34 +8,32 @@ public class FFTDisplay : MonoBehaviour {
 	public AudioSource playbackSource;
 	public float threshold;
 
-	public int freq = 24000;
-	public float delay = 0.033f;
+	public int freq = 48000;
+	public float delay;
 	const int WINDOW_SIZE = 1024;
 	private float phase = 0;
 	
 	private int prevDominant = 0;
+	public float minStopTime;
 	public List<int> pitches;
 	public float volume = 0.0f;
-	//private Dictionary<int, float> pitchesToVolumes;
-	private AudioClip playback;
+	private Dictionary<int, float> pitchesToVolumes;
 	
 	private Harmonizer harmonizer;
 
 	void Start()
 	{
 		harmonizer = GetComponent<Harmonizer>();
-		audioSource.clip = Microphone.Start("", true, 5, freq); 
-		playback = AudioClip.Create(
+		audioSource.clip = Microphone.Start("", true, 2, freq); 
+		/*playback = AudioClip.Create(
 		"PlaybackSine",
 		44100,
 		1,
 		44100,
-		true,
-		OnAudioRead);
-		playbackSource.clip = playback;
+		true);*/
 	}
 	
-	void OnAudioRead(float[] data)
+	void OnAudioFilterRead(float[] data, int channels)
 	{
 		List<int> curPitches;
 		float curVolume;
@@ -45,19 +43,25 @@ public class FFTDisplay : MonoBehaviour {
 		curVolume = volume;
 		}
 		
-		for (int i = 0; i < data.Length; i++)
+		for (int i = 0; i < data.Length / channels; i++)
 		{
 			float total = 0.0f;
 			foreach (int curTone in curPitches)
 			{
-				total += 1000 * curVolume * Mathf.Sin(phase * Harmonizer.getFrequency(curTone));
+				float ratio = Harmonizer.getFrequency(curTone) / Harmonizer.getFrequency(prevDominant);
+				foreach (KeyValuePair<int, float> pair in pitchesToVolumes)
+				{
+					int curNote = pair.Key;
+					total += 100 * pair.Value * Mathf.Sin(phase * Harmonizer.getFrequency(curNote) * ratio);
+				}
 			}
-			data[i] = total;
-			phase += 2 * Mathf.PI / 44100;
+			total = Mathf.Min(Mathf.Max(total,-1.0f),1.0f);
+			for (int j = 0; j < channels; j++)
+				data[channels * i + j] = total;
+			phase += 2 * Mathf.PI / 48000;
 			phase %= 2 * Mathf.PI;
 		}
 	}
-
 
 	public float[] spectrum = new float[WINDOW_SIZE];
 
@@ -92,7 +96,7 @@ public class FFTDisplay : MonoBehaviour {
 			Debug.DrawLine( new Vector3(i - 1, 50000f * spectrum[i - 1] + 10, 0), 
 				new Vector3(i, 50000f * spectrum[i] + 10, 0), 
 				Color.red);
-			Debug.DrawLine( new Vector3(i - 1, Mathf.Log(spectrum[i - 1]) + 10, 2),
+			/*Debug.DrawLine( new Vector3(i - 1, Mathf.Log(spectrum[i - 1]) + 10, 2),
 				new Vector3(i, Mathf.Log(spectrum[i]) + 10, 2),
 				Color.cyan);
 			Debug.DrawLine( new Vector3(Mathf.Log(i - 1), spectrum[i - 1] - 10, 1), 
@@ -100,7 +104,7 @@ public class FFTDisplay : MonoBehaviour {
 				Color.green);
 			Debug.DrawLine( new Vector3(Mathf.Log(i - 1), Mathf.Log(spectrum[i - 1]), 3), 
 				new Vector3(Mathf.Log(i), Mathf.Log(spectrum[i]), 3), 
-				Color.yellow);
+				Color.yellow);*/
 		}
 		
 		int dominantPitch = 0;
@@ -112,6 +116,7 @@ public class FFTDisplay : MonoBehaviour {
 				dominantPitch = pair.Key;
 				harmonizer.key = dominantPitch;
 				maxVolume = pair.Value;
+				break;
 			}
 		}
 		
@@ -124,8 +129,7 @@ public class FFTDisplay : MonoBehaviour {
 				lock(this)
 				{
 					pitches = newPitches;
-					volume = maxVolume;
-					//pitchesToVolumes = newPitchesToVolumes;
+					pitchesToVolumes = newPitchesToVolumes;
 				}
 			
 				if (newPitches.Count > 0)
@@ -151,7 +155,6 @@ public class FFTDisplay : MonoBehaviour {
 				volume = 0.0f;
 			}
 		}
-		
 		prevDominant = dominantPitch;
 	}
 }
